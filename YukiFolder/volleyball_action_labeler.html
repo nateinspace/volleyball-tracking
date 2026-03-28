@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Volleyball Action Labeler</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0e0e12;
+    --surface: #18181f;
+    --surface-2: #222230;
+    --border: #2a2a3a;
+    --text: #e2e2ea;
+    --text-dim: #7a7a90;
+    --accent: #6c5ce7;
+    --accent-glow: rgba(108, 92, 231, 0.3);
+
+    --dig: #00cec9;
+    --set: #fdcb6e;
+    --attack: #e17055;
+    --block: #6c5ce7;
+    --serve: #55efc4;
+    --idle: #636e72;
+    --ignore: #e74c3c;
+
+    --bracket-len: 12px;
+    --bracket-weight: 2.5px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ─── Top bar ─── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    gap: 16px;
+    min-height: 52px;
+  }
+  .topbar-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.5px;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  .topbar-center {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+  }
+  .frame-counter {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .frame-counter span { color: var(--text); font-weight: 600; }
+
+  /* ─── Buttons ─── */
+  .btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:hover { background: var(--border); }
+  .btn-accent {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .btn-accent:hover { filter: brightness(1.15); }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+  kbd {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--text-dim);
+    margin-left: 4px;
+  }
+
+  /* ─── Slider ─── */
+  .slider-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+  .slider-group input[type="range"] {
+    width: 80px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  /* ─── Main area ─── */
+  .main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* ─── Canvas area ─── */
+  .canvas-area {
+    flex: 1;
+    display: flex;
+    position: relative;
+    overflow: hidden;
+  }
+  .canvas-pane {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    background: #0a0a0f;
+  }
+  .canvas-pane canvas {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+  .pane-label {
+    position: absolute;
+    top: 8px;
+    left: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .pane-divider {
+    width: 1px;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+
+  /* ─── Side panel ─── */
+  .side-panel {
+    width: 260px;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .panel-section {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-section h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  /* Detection list */
+  .det-list { display: flex; flex-direction: column; gap: 4px; }
+  .det-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.12s;
+    border: 1px solid transparent;
+  }
+  .det-item:hover { background: var(--surface-2); }
+  .det-item.selected {
+    border-color: var(--accent);
+    background: rgba(108, 92, 231, 0.08);
+  }
+  .det-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .det-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .det-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .det-conf {
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+  .det-label-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+  .det-item .del-btn {
+    opacity: 0;
+    font-size: 14px;
+    color: var(--text-dim);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 4px;
+    transition: opacity 0.15s;
+  }
+  .det-item:hover .del-btn { opacity: 1; }
+  .det-item .del-btn:hover { color: #e17055; }
+
+  /* Label buttons */
+  .label-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+  }
+  .label-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 8px 6px;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.12s;
+    text-align: center;
+    position: relative;
+  }
+  .label-btn:hover { filter: brightness(1.2); transform: scale(1.03); }
+  .label-btn.active { border-color: #fff; box-shadow: 0 0 12px rgba(255,255,255,0.15); }
+  .label-btn kbd {
+    position: absolute;
+    top: 3px;
+    right: 4px;
+    font-size: 8px;
+    background: rgba(0,0,0,0.4);
+    border: none;
+    color: rgba(255,255,255,0.5);
+  }
+
+  .label-btn[data-label="dig"]    { background: rgba(0,206,201,0.15); color: var(--dig); }
+  .label-btn[data-label="set"]    { background: rgba(253,203,110,0.15); color: var(--set); }
+  .label-btn[data-label="attack"] { background: rgba(225,112,85,0.15); color: var(--attack); }
+  .label-btn[data-label="block"]  { background: rgba(108,92,231,0.15); color: var(--block); }
+  .label-btn[data-label="serve"]  { background: rgba(85,239,196,0.15); color: var(--serve); }
+  .label-btn[data-label="idle"]   { background: rgba(99,110,114,0.15); color: var(--idle); }
+  .label-btn[data-label="ignore"] { background: rgba(231,76,60,0.15); color: var(--ignore); }
+
+  /* ─── Stats bar ─── */
+  .stats-bar {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .stat-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+
+  /* ─── Onboarding overlay ─── */
+  .onboarding {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,10,15,0.92);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(8px);
+  }
+  .onboarding-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 40px;
+    max-width: 520px;
+    width: 90%;
+    text-align: center;
+  }
+  .onboarding-card h2 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    margin-bottom: 8px;
+    color: var(--accent);
+  }
+  .onboarding-card p {
+    color: var(--text-dim);
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 20px;
+  }
+  .onboarding-card .file-drop {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 32px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 16px;
+  }
+  .onboarding-card .file-drop:hover,
+  .onboarding-card .file-drop.dragover {
+    border-color: var(--accent);
+    background: var(--accent-glow);
+  }
+  .file-drop-text {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .file-drop-text strong { color: var(--text); }
+
+  /* ─── Drawing overlay ─── */
+  .draw-mode-banner {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(225,112,85,0.9);
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 14px;
+    border-radius: 6px;
+    z-index: 20;
+    pointer-events: none;
+    display: none;
+  }
+  .draw-mode-banner.visible { display: block; }
+
+  /* ─── Bottom bar ─── */
+  .bottombar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    gap: 12px;
+  }
+  .shortcuts {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .shortcut-item { display: flex; align-items: center; gap: 4px; }
+
+  .progress-track {
+    flex: 1;
+    max-width: 400px;
+    height: 4px;
+    background: var(--surface-2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.2s;
+  }
+</style>
+</head>
+<body>
+
+<!-- Onboarding -->
+<div class="onboarding" id="onboarding">
+  <div class="onboarding-card">
+    <h2>Volleyball Action Labeler</h2>
+    <p>Load your extracted frames and detection JSON to begin labeling volleyball actions.</p>
+    <div class="file-drop" id="fileDrop">
+      <p class="file-drop-text">
+        <strong>Select your output folder</strong><br>
+        Pick the folder containing <code>detections.json</code> and <code>frames/</code>
+      </p>
+      <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none">
+    </div>
+    <button class="btn btn-accent" onclick="document.getElementById('folderInput').click()">Choose Folder</button>
+  </div>
+</div>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div class="topbar-title">VB LABELER</div>
+  <div class="topbar-center">
+    <button class="btn btn-sm" onclick="prevFrame()">← Prev <kbd>A</kbd></button>
+    <div class="frame-counter">
+      <span id="videoLabel" style="color:var(--accent);font-weight:700;"></span>
+      &nbsp;·&nbsp;
+      Frame <span id="frameNum">0</span> / <span id="totalFrames">0</span>
+      &nbsp;·&nbsp; <span id="timestamp">0.000s</span>
+      &nbsp;·&nbsp; <span id="detCount">0</span> detections
+    </div>
+    <button class="btn btn-sm" onclick="nextFrame()">Next → <kbd>D</kbd></button>
+    <button class="btn btn-sm" id="drawBtn" onclick="toggleDrawMode()">✏️ Draw Box <kbd>B</kbd></button>
+  </div>
+  <div class="topbar-right">
+    <div class="slider-group">
+      <label>Opacity</label>
+      <input type="range" id="opacitySlider" min="0" max="100" value="80" oninput="updateOpacity(this.value)">
+    </div>
+    <button class="btn btn-accent btn-sm" onclick="saveJSON()">💾 Save <kbd>Ctrl+S</kbd></button>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <!-- Canvas area — side by side -->
+  <div class="canvas-area">
+    <div class="canvas-pane" id="cleanPane">
+      <div class="pane-label">Clean Reference</div>
+      <canvas id="cleanCanvas"></canvas>
+    </div>
+    <div class="pane-divider"></div>
+    <div class="canvas-pane" id="annotatedPane">
+      <div class="pane-label">Annotated</div>
+      <canvas id="annotCanvas"></canvas>
+      <div class="draw-mode-banner" id="drawBanner">DRAW MODE — Click and drag to create a box · ESC to cancel</div>
+    </div>
+  </div>
+
+  <!-- Side panel -->
+  <div class="side-panel">
+    <div class="panel-section">
+      <h3>Assign Label</h3>
+      <div class="label-grid">
+        <button class="label-btn" data-label="dig" onclick="assignLabel('dig')">Dig<kbd>1</kbd></button>
+        <button class="label-btn" data-label="set" onclick="assignLabel('set')">Set<kbd>2</kbd></button>
+        <button class="label-btn" data-label="attack" onclick="assignLabel('attack')">Attack<kbd>3</kbd></button>
+        <button class="label-btn" data-label="block" onclick="assignLabel('block')">Block<kbd>4</kbd></button>
+        <button class="label-btn" data-label="serve" onclick="assignLabel('serve')">Serve<kbd>5</kbd></button>
+        <button class="label-btn" data-label="idle" onclick="assignLabel('idle')">Idle<kbd>6</kbd></button>
+        <button class="label-btn" data-label="ignore" onclick="assignLabel('ignore')" style="grid-column: 1 / -1;">✕ Not a Player<kbd>7</kbd></button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Detections</h3>
+      <div class="det-list" id="detList"></div>
+    </div>
+
+    <div class="panel-section">
+      <h3>Session Stats</h3>
+      <div class="stats-bar" id="statsBar"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom bar -->
+<div class="bottombar">
+  <div class="shortcuts">
+    <div class="shortcut-item"><kbd>A</kbd><span>/ ←  Prev</span></div>
+    <div class="shortcut-item"><kbd>D</kbd><span>/ →  Next</span></div>
+    <div class="shortcut-item"><kbd>H</kbd><span>Hide boxes</span></div>
+    <div class="shortcut-item"><kbd>B</kbd><span>Draw box</span></div>
+    <div class="shortcut-item"><kbd>1-7</kbd><span>Label</span></div>
+    <div class="shortcut-item"><kbd>Tab</kbd><span>Next det.</span></div>
+    <div class="shortcut-item"><kbd>Del</kbd><span>Remove det.</span></div>
+  </div>
+  <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  <div id="labeledCount">0 labeled</div>
+</div>
+
+<script>
+// ─── State ───
+let data = null;
+let frameImages = {};  // filename -> blob URL
+let currentFrameIdx = 0;
+let selectedDetIdx = -1;
+let annotOpacity = 0.8;
+let annotHidden = false;
+let drawMode = false;
+let hoverDetIdx = -1;
+let unsavedChanges = false;
+
+// Drawing state
+let isDrawing = false;
+let drawStart = null;
+let drawEnd = null;
+
+const LABELS = ['dig','set','attack','block','serve','idle','ignore'];
+const LABEL_COLORS = { dig:'#00cec9', set:'#fdcb6e', attack:'#e17055', block:'#6c5ce7', serve:'#55efc4', idle:'#636e72', ignore:'#e74c3c' };
+const LABEL_KEYS = { '1':'dig', '2':'set', '3':'attack', '4':'block', '5':'serve', '6':'idle', '7':'ignore' };
+
+// ─── File Loading ───
+const fileDrop = document.getElementById('fileDrop');
+const folderInput = document.getElementById('folderInput');
+
+fileDrop.addEventListener('click', () => folderInput.click());
+fileDrop.addEventListener('dragover', e => { e.preventDefault(); fileDrop.classList.add('dragover'); });
+fileDrop.addEventListener('dragleave', () => fileDrop.classList.remove('dragover'));
+fileDrop.addEventListener('drop', e => {
+  e.preventDefault();
+  fileDrop.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
+});
+folderInput.addEventListener('change', e => handleFiles(e.target.files));
+
+async function handleFiles(files) {
+  const fileArr = Array.from(files);
+
+  // Find detections.json
+  const jsonFile = fileArr.find(f => f.name === 'detections.json');
+  if (!jsonFile) {
+    alert('Could not find detections.json in the selected folder.');
+    return;
+  }
+
+  const text = await jsonFile.text();
+  data = JSON.parse(text);
+
+  // Load frame images
+  const imageFiles = fileArr.filter(f => /\.(jpg|jpeg|png)$/i.test(f.name));
+  for (const imgFile of imageFiles) {
+    const name = imgFile.name;
+    frameImages[name] = URL.createObjectURL(imgFile);
+  }
+
+  document.getElementById('onboarding').style.display = 'none';
+  document.getElementById('totalFrames').textContent = data.frames.length;
+  currentFrameIdx = 0;
+  renderFrame();
+  updateStats();
+}
+
+// ─── Rendering ───
+const cleanCanvas = document.getElementById('cleanCanvas');
+const annotCanvas = document.getElementById('annotCanvas');
+const cleanCtx = cleanCanvas.getContext('2d');
+const annotCtx = annotCanvas.getContext('2d');
+
+function renderFrame() {
+  if (!data || !data.frames.length) return;
+  const frame = data.frames[currentFrameIdx];
+  const imgUrl = frameImages[frame.filename];
+  if (!imgUrl) return;
+
+  const img = new Image();
+  img.onload = () => {
+    const w = frame.width || img.naturalWidth;
+    const h = frame.height || img.naturalHeight;
+
+    cleanCanvas.width = w;
+    cleanCanvas.height = h;
+    annotCanvas.width = w;
+    annotCanvas.height = h;
+
+    // Clean pane
+    cleanCtx.drawImage(img, 0, 0, w, h);
+
+    // Annotated pane
+    annotCtx.drawImage(img, 0, 0, w, h);
+
+    if (!annotHidden) {
+      drawAnnotations(annotCtx, frame.detections, w, h);
+    }
+
+    // If drawing in progress, show rubber band
+    if (isDrawing && drawStart && drawEnd) {
+      drawRubberBand(annotCtx);
+    }
+
+    // Update UI
+    document.getElementById('frameNum').textContent = currentFrameIdx + 1;
+    document.getElementById('timestamp').textContent = frame.timestamp.toFixed(3) + 's';
+    document.getElementById('detCount').textContent = frame.detections.length;
+    // Show video indicator if multi-video
+    const videoLabel = document.getElementById('videoLabel');
+    if (frame.video_id !== undefined) {
+      const vidName = frame.video_filename || ('Video ' + frame.video_id);
+      videoLabel.textContent = 'v' + frame.video_id;
+      videoLabel.title = vidName;
+    } else {
+      videoLabel.textContent = '';
+    }
+    renderDetList(frame.detections);
+    updateProgress();
+  };
+  img.src = imgUrl;
+}
+
+function drawAnnotations(ctx, detections, w, h) {
+  const scale = Math.max(w, h) / 1280;
+  const bracketLen = Math.max(8, 14 * scale);
+  const bracketWeight = Math.max(2, 3 * scale);
+  const fontSize = Math.max(11, 14 * scale);
+
+  for (let i = 0; i < detections.length; i++) {
+    const det = detections[i];
+    const { x1, y1, x2, y2 } = det.bbox;
+    const label = det.label || 'idle';
+    const color = LABEL_COLORS[label] || LABEL_COLORS.idle;
+    const isSelected = (i === selectedDetIdx);
+    const isHovered = (i === hoverDetIdx);
+
+    let alpha = annotOpacity;
+    if (selectedDetIdx >= 0 && !isSelected) alpha *= 0.25;
+
+    // Ignored detections: render very dimly with an X unless selected
+    if (label === 'ignore' && !isSelected) {
+      ctx.save();
+      ctx.globalAlpha = 0.15;
+      ctx.strokeStyle = '#e74c3c';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      // Diagonal X
+      ctx.beginPath();
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.moveTo(x2, y1); ctx.lineTo(x1, y2);
+      ctx.stroke();
+      ctx.restore();
+      continue;  // Skip full rendering for ignored
+    }
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // Hover: light fill
+    if (isHovered) {
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.08;
+      ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.globalAlpha = alpha;
+    }
+
+    // Selected: subtle glow
+    if (isSelected) {
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 12;
+      ctx.globalAlpha = Math.min(alpha + 0.2, 1);
+    }
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = isSelected ? bracketWeight + 1 : bracketWeight;
+    ctx.lineCap = 'round';
+
+    // Corner brackets
+    const bLen = isSelected ? bracketLen * 1.3 : bracketLen;
+    // Top-left
+    ctx.beginPath();
+    ctx.moveTo(x1, y1 + bLen); ctx.lineTo(x1, y1); ctx.lineTo(x1 + bLen, y1);
+    ctx.stroke();
+    // Top-right
+    ctx.beginPath();
+    ctx.moveTo(x2 - bLen, y1); ctx.lineTo(x2, y1); ctx.lineTo(x2, y1 + bLen);
+    ctx.stroke();
+    // Bottom-left
+    ctx.beginPath();
+    ctx.moveTo(x1, y2 - bLen); ctx.lineTo(x1, y2); ctx.lineTo(x1 + bLen, y2);
+    ctx.stroke();
+    // Bottom-right
+    ctx.beginPath();
+    ctx.moveTo(x2 - bLen, y2); ctx.lineTo(x2, y2); ctx.lineTo(x2, y2 - bLen);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+
+    // Label tag
+    if (label !== 'idle' || isSelected) {
+      const tagText = `#${det.id} ${label.toUpperCase()}`;
+      ctx.font = `bold ${fontSize}px 'JetBrains Mono', monospace`;
+      const metrics = ctx.measureText(tagText);
+      const tagH = fontSize + 6;
+      const tagW = metrics.width + 10;
+      const tagX = x1;
+      const tagY = y1 - tagH - 2;
+
+      ctx.globalAlpha = Math.min(alpha + 0.1, 1);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.roundRect(tagX, tagY, tagW, tagH, 3);
+      ctx.fill();
+
+      ctx.fillStyle = '#000';
+      ctx.globalAlpha = 1;
+      ctx.fillText(tagText, tagX + 5, tagY + fontSize);
+    }
+
+    ctx.restore();
+  }
+}
+
+function drawRubberBand(ctx) {
+  if (!drawStart || !drawEnd) return;
+  const { canvasX: x1, canvasY: y1 } = drawStart;
+  const { canvasX: x2, canvasY: y2 } = drawEnd;
+  const rx = Math.min(x1, x2), ry = Math.min(y1, y2);
+  const rw = Math.abs(x2 - x1), rh = Math.abs(y2 - y1);
+
+  ctx.save();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(rx, ry, rw, rh);
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.fillRect(rx, ry, rw, rh);
+  ctx.restore();
+}
+
+// ─── Detection List ───
+function renderDetList(detections) {
+  const list = document.getElementById('detList');
+  list.innerHTML = '';
+
+  if (!detections.length) {
+    list.innerHTML = '<div style="font-size:12px;color:var(--text-dim);padding:8px;">No detections. Press B to draw a box.</div>';
+    return;
+  }
+
+  detections.forEach((det, i) => {
+    const label = det.label || 'idle';
+    const color = LABEL_COLORS[label];
+    const item = document.createElement('div');
+    item.className = 'det-item' + (i === selectedDetIdx ? ' selected' : '');
+    item.innerHTML = `
+      <div class="det-dot" style="background:${color}"></div>
+      <div class="det-info">
+        <div class="det-id">#${det.id}</div>
+        <div class="det-conf">${det.confidence ? (det.confidence * 100).toFixed(0) + '% conf' : 'manual'}</div>
+      </div>
+      <div class="det-label-badge" style="background:${color}22;color:${color}">${label}</div>
+      <button class="del-btn" title="Delete detection" onclick="event.stopPropagation();deleteDet(${i})">×</button>
+    `;
+    item.addEventListener('click', () => selectDet(i));
+    item.addEventListener('mouseenter', () => { hoverDetIdx = i; renderFrame(); });
+    item.addEventListener('mouseleave', () => { hoverDetIdx = -1; renderFrame(); });
+    list.appendChild(item);
+  });
+}
+
+// ─── Selection & Labeling ───
+function selectDet(idx) {
+  selectedDetIdx = (selectedDetIdx === idx) ? -1 : idx;
+  renderFrame();
+  updateLabelButtons();
+}
+
+function assignLabel(label) {
+  if (!data || selectedDetIdx < 0) return;
+  const frame = data.frames[currentFrameIdx];
+  if (selectedDetIdx >= frame.detections.length) return;
+  frame.detections[selectedDetIdx].label = label;
+  unsavedChanges = true;
+
+  // Auto-advance to next unlabeled detection
+  const nextUnlabeled = frame.detections.findIndex((d, i) => i > selectedDetIdx && d.label === 'idle');
+  if (nextUnlabeled >= 0) {
+    selectedDetIdx = nextUnlabeled;
+  }
+
+  renderFrame();
+  updateLabelButtons();
+  updateStats();
+}
+
+function updateLabelButtons() {
+  document.querySelectorAll('.label-btn').forEach(btn => btn.classList.remove('active'));
+  if (selectedDetIdx < 0 || !data) return;
+  const frame = data.frames[currentFrameIdx];
+  if (selectedDetIdx >= frame.detections.length) return;
+  const label = frame.detections[selectedDetIdx].label || 'idle';
+  const btn = document.querySelector(`.label-btn[data-label="${label}"]`);
+  if (btn) btn.classList.add('active');
+}
+
+function deleteDet(idx) {
+  if (!data) return;
+  const frame = data.frames[currentFrameIdx];
+  frame.detections.splice(idx, 1);
+  // Re-index remaining detections
+  frame.detections.forEach((d, i) => d.id = i);
+  if (selectedDetIdx >= frame.detections.length) selectedDetIdx = -1;
+  if (selectedDetIdx === idx) selectedDetIdx = -1;
+  unsavedChanges = true;
+  renderFrame();
+  updateStats();
+}
+
+// ─── Navigation ───
+function nextFrame() {
+  if (!data) return;
+  if (currentFrameIdx < data.frames.length - 1) {
+    currentFrameIdx++;
+    selectedDetIdx = -1;
+    hoverDetIdx = -1;
+    renderFrame();
+  }
+}
+
+function prevFrame() {
+  if (!data) return;
+  if (currentFrameIdx > 0) {
+    currentFrameIdx--;
+    selectedDetIdx = -1;
+    hoverDetIdx = -1;
+    renderFrame();
+  }
+}
+
+function nextDet() {
+  if (!data) return;
+  const frame = data.frames[currentFrameIdx];
+  if (!frame.detections.length) return;
+  selectedDetIdx = (selectedDetIdx + 1) % frame.detections.length;
+  renderFrame();
+  updateLabelButtons();
+}
+
+// ─── Draw Mode ───
+function toggleDrawMode() {
+  drawMode = !drawMode;
+  const btn = document.getElementById('drawBtn');
+  const banner = document.getElementById('drawBanner');
+  if (drawMode) {
+    btn.classList.add('btn-accent');
+    banner.classList.add('visible');
+    annotCanvas.style.cursor = 'crosshair';
+  } else {
+    btn.classList.remove('btn-accent');
+    banner.classList.remove('visible');
+    annotCanvas.style.cursor = 'default';
+    isDrawing = false;
+    drawStart = null;
+    drawEnd = null;
+  }
+}
+
+function getCanvasCoords(e) {
+  const rect = annotCanvas.getBoundingClientRect();
+  const scaleX = annotCanvas.width / rect.width;
+  const scaleY = annotCanvas.height / rect.height;
+  return {
+    canvasX: (e.clientX - rect.left) * scaleX,
+    canvasY: (e.clientY - rect.top) * scaleY,
+  };
+}
+
+annotCanvas.addEventListener('mousedown', e => {
+  if (!drawMode || !data) return;
+  isDrawing = true;
+  drawStart = getCanvasCoords(e);
+  drawEnd = drawStart;
+});
+
+annotCanvas.addEventListener('mousemove', e => {
+  if (!data) return;
+  if (isDrawing && drawMode) {
+    drawEnd = getCanvasCoords(e);
+    renderFrame();
+    return;
+  }
+
+  // Hover detection (non-draw mode)
+  if (!drawMode) {
+    const coords = getCanvasCoords(e);
+    const frame = data.frames[currentFrameIdx];
+    let found = -1;
+    for (let i = frame.detections.length - 1; i >= 0; i--) {
+      const { x1, y1, x2, y2 } = frame.detections[i].bbox;
+      if (coords.canvasX >= x1 && coords.canvasX <= x2 && coords.canvasY >= y1 && coords.canvasY <= y2) {
+        found = i;
+        break;
+      }
+    }
+    if (found !== hoverDetIdx) {
+      hoverDetIdx = found;
+      renderFrame();
+    }
+  }
+});
+
+annotCanvas.addEventListener('mouseup', e => {
+  if (!isDrawing || !drawMode || !data) return;
+  isDrawing = false;
+  drawEnd = getCanvasCoords(e);
+
+  const x1 = Math.min(drawStart.canvasX, drawEnd.canvasX);
+  const y1 = Math.min(drawStart.canvasY, drawEnd.canvasY);
+  const x2 = Math.max(drawStart.canvasX, drawEnd.canvasX);
+  const y2 = Math.max(drawStart.canvasY, drawEnd.canvasY);
+
+  // Minimum size check
+  if ((x2 - x1) < 10 || (y2 - y1) < 10) {
+    drawStart = null;
+    drawEnd = null;
+    renderFrame();
+    return;
+  }
+
+  const frame = data.frames[currentFrameIdx];
+  const newDet = {
+    id: frame.detections.length,
+    bbox: { x1: Math.round(x1), y1: Math.round(y1), x2: Math.round(x2), y2: Math.round(y2) },
+    confidence: null,
+    label: 'idle',
+    manual: true
+  };
+  frame.detections.push(newDet);
+  selectedDetIdx = frame.detections.length - 1;
+  unsavedChanges = true;
+
+  drawStart = null;
+  drawEnd = null;
+  toggleDrawMode();
+  renderFrame();
+  updateLabelButtons();
+  updateStats();
+});
+
+// Click to select on annotated canvas (non-draw mode)
+annotCanvas.addEventListener('click', e => {
+  if (drawMode || !data) return;
+  const coords = getCanvasCoords(e);
+  const frame = data.frames[currentFrameIdx];
+  let found = -1;
+  for (let i = frame.detections.length - 1; i >= 0; i--) {
+    const { x1, y1, x2, y2 } = frame.detections[i].bbox;
+    if (coords.canvasX >= x1 && coords.canvasX <= x2 && coords.canvasY >= y1 && coords.canvasY <= y2) {
+      found = i;
+      break;
+    }
+  }
+  selectDet(found);
+});
+
+// ─── Toggle / Opacity ───
+function updateOpacity(val) {
+  annotOpacity = val / 100;
+  renderFrame();
+}
+
+function toggleAnnotations() {
+  annotHidden = !annotHidden;
+  renderFrame();
+}
+
+// ─── Stats ───
+function updateStats() {
+  if (!data) return;
+  const counts = {};
+  LABELS.forEach(l => counts[l] = 0);
+  let totalLabeled = 0;
+  let totalDets = 0;
+
+  data.frames.forEach(f => {
+    f.detections.forEach(d => {
+      totalDets++;
+      const l = d.label || 'idle';
+      counts[l] = (counts[l] || 0) + 1;
+      if (l !== 'idle') totalLabeled++;
+    });
+  });
+
+  const bar = document.getElementById('statsBar');
+  bar.innerHTML = LABELS.filter(l => counts[l] > 0).map(l =>
+    `<div class="stat-chip" style="background:${LABEL_COLORS[l]}22;color:${LABEL_COLORS[l]}">${l}: ${counts[l]}</div>`
+  ).join('');
+
+  document.getElementById('labeledCount').textContent = `${totalLabeled} / ${totalDets} labeled`;
+}
+
+function updateProgress() {
+  if (!data) return;
+  let labeled = 0, total = 0;
+  data.frames.forEach(f => f.detections.forEach(d => {
+    total++;
+    if (d.label && d.label !== 'idle') labeled++;
+  }));
+  const pct = total > 0 ? (labeled / total * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+// ─── Save ───
+function saveJSON() {
+  if (!data) return;
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'detections_labeled.json';
+  a.click();
+  unsavedChanges = false;
+}
+
+// ─── Keyboard ───
+document.addEventListener('keydown', e => {
+  // Don't capture when typing in an input
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { nextFrame(); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { prevFrame(); e.preventDefault(); }
+  else if (e.key === 'h' || e.key === 'H') { toggleAnnotations(); e.preventDefault(); }
+  else if (e.key === 'b' || e.key === 'B') { toggleDrawMode(); e.preventDefault(); }
+  else if (e.key === 'Tab') { e.preventDefault(); nextDet(); }
+  else if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (selectedDetIdx >= 0) { deleteDet(selectedDetIdx); e.preventDefault(); }
+  }
+  else if (e.key === 'Escape') {
+    if (drawMode) toggleDrawMode();
+    else { selectedDetIdx = -1; renderFrame(); }
+  }
+  else if (LABEL_KEYS[e.key]) {
+    assignLabel(LABEL_KEYS[e.key]);
+    e.preventDefault();
+  }
+  else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    saveJSON();
+  }
+});
+
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', e => {
+  if (unsavedChanges) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
+</script>
+</body>
+</html>
