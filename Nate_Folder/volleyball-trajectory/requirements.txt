@@ -1,0 +1,17 @@
+# Core
+ultralytics>=8.3.0
+opencv-python>=4.8.0
+numpy>=1.24.0
+torch>=2.5.1
+torchvision>=0.20.1
+tqdm>=4.66.0
+huggingface_hub>=0.20.0
+
+# Open-vocabulary text prompts in YOLO-World (set_classes) use CLIP ViT-B/32 — installed automatically by Ultralytics when needed:
+#   pip install git+https://github.com/ultralytics/CLIP.git
+
+# SAM 2 (video tracking)
+#   pip install git+https://github.com/facebookresearch/sam2.git
+#
+# Optional: decord speeds up MP4 loading in SAM2 (not available on all Python versions).
+# Without it, the script extracts JPEG frames to a temp folder automatically.
